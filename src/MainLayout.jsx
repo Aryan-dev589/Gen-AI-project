@@ -10,6 +10,11 @@ import {
   LogOut,
 } from 'lucide-react';
  import { ChatInterface } from './ChatInterface';
+ import { WellnessToolkit } from './Wellness';
+ import { MoodJournal } from './MoodJournal';
+ import { MeditationSpace }   from './Meditation';
+ import { Resources } from './Resources';
+ 
  // Add this import
 
 const navItems = [
@@ -103,6 +108,14 @@ const contentMap = {
           <AnimatePresence mode="wait">
             {activeTab === 'chat' ? (
               <ChatInterface /> // Use the full ChatInterface component
+            ) : activeTab === 'wellness' ? (
+              <WellnessToolkit />
+            ) : activeTab === 'mood' ? ( 
+              <MoodJournal />
+            ) : activeTab === 'meditation' ? (
+              <MeditationSpace />
+            ) : activeTab === 'resources' ? (
+              <Resources />
             ) :  (
               <motion.div
                 key={activeTab}

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Play, Pause, RotateCcw, Timer, Heart, BookOpen, Activity, Wind } from 'lucide-react';
 
-export const WellnessToolkit = () => {
+ export const WellnessToolkit = () => {
   const [activeTool, setActiveTool] = useState(null);
   const [journalEntry, setJournalEntry] = useState('');
   const [gratitudeList, setGratitudeList] = useState(['', '', '']);
@@ -294,3 +294,4 @@ export const WellnessToolkit = () => {
     </div>
   );
 };
+
