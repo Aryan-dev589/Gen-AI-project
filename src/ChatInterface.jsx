@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 
- export const ChatInterface = () => {
+export const ChatInterface = () => {
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -12,10 +12,10 @@ import React, { useState, useRef, useEffect } from 'react';
   ]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [scriptPreference, setScriptPreference] = useState("Auto-Mirror");
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Sample coping tools suggestions
   const copingTools = [
     { id: 1, name: "Breathing Exercise", icon: "🌬️", duration: "5 min" },
     { id: 2, name: "Quick Meditation", icon: "🧘", duration: "3 min" },
@@ -23,85 +23,112 @@ import React, { useState, useRef, useEffect } from 'react';
     { id: 4, name: "Calming Sounds", icon: "🎵", duration: "..." }
   ];
 
-  // Auto-scroll to bottom when new messages are added
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSendMessage = () => {
+  // --- UPDATED: Now talks to your FastAPI Backend ---
+  const handleSendMessage = async () => {
     if (inputText.trim() === '') return;
 
-    // Add user message
+    const currentText = inputText; // Save text before clearing input
+    
+    // 1. Show User Message Immediately
     const newUserMessage = {
-      id: messages.length + 1,
-      text: inputText,
+      id: Date.now(), // Using Date.now() for unique IDs to prevent rendering bugs
+      text: currentText,
       sender: 'user',
       timestamp: new Date()
     };
 
-    setMessages([...messages, newUserMessage]);
+    setMessages(prev => [...prev, newUserMessage]);
     setInputText('');
     setIsTyping(true);
 
-    // Simulate AI response after a delay
-    setTimeout(() => {
-      const aiResponses = [
-        "I understand how that might make you feel. Would you like to try a quick breathing exercise to help?",
-        "Thank you for sharing that with me. It's completely normal to feel this way sometimes.",
-        "I'm here to listen. Would it help to talk more about what's causing these feelings?",
-        "I appreciate you opening up. Remember, it's okay to not be okay sometimes.",
-        "That sounds challenging. Would you like me to suggest a calming activity?"
-      ];
-      
-      const randomResponse = aiResponses[Math.floor(Math.random() * aiResponses.length)];
-      
+    try {
+      // 2. Send to FastAPI
+      const response = await fetch('http://localhost:8000/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: "demo_user_1", // Hardcoded for this sprint
+          message: currentText,
+          script_preference: scriptPreference
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Backend connection failed");
+      }
+
+      const data = await response.json();
+
+      // 3. Show AI Response
       const newAiMessage = {
-        id: messages.length + 2,
-        text: randomResponse,
+        id: Date.now() + 1,
+        text: data.reply, // The text Gemini generated
         sender: 'ai',
         timestamp: new Date(),
-        mood: Math.random() > 0.5 ? 'calm' : 'concerned'
+        mood: data.mood   // The mood Gemini analyzed ('calm' or 'concerned')
       };
 
       setMessages(prev => [...prev, newAiMessage]);
+
+    } catch (error) {
+      console.error("Error calling backend:", error);
+      // Fallback if the server is offline
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        text: "I'm having a little trouble connecting to my servers right now. Please make sure the Python backend is running!",
+        sender: 'ai',
+        timestamp: new Date(),
+        mood: 'calm'
+      }]);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
   };
 
-  const handleQuickAction = (action) => {
+  // --- UPDATED: Quick Actions also talk to the Backend ---
+  const handleQuickAction = async (action) => {
     const newUserMessage = {
-      id: messages.length + 1,
+      id: Date.now(),
       text: action,
       sender: 'user',
       timestamp: new Date()
     };
 
-    setMessages([...messages, newUserMessage]);
+    setMessages(prev => [...prev, newUserMessage]);
     setIsTyping(true);
 
-    // Simulate AI response to quick action
-    setTimeout(() => {
-      let response = "";
+    try {
+      const response = await fetch('http://localhost:8000/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: "demo_user_1", message: action ,script_preference: scriptPreference})
+      });
+
+      if (!response.ok) throw new Error("Backend connection failed");
       
-      if (action === "Suggest an exercise") {
-        response = "Sure! Let's try a simple breathing exercise. Breathe in slowly for 4 counts, hold for 2 counts, and exhale for 6 counts. Repeat 5 times.";
-      } else if (action === "I'm feeling anxious") {
-        response = "I'm here for you. Let's try grounding technique: Name 5 things you can see, 4 things you can touch, 3 things you can hear, 2 things you can smell, and 1 thing you can taste.";
-      } else {
-        response = "I'm glad you asked for help. Let me suggest a quick meditation to help ease your mind.";
-      }
-      
+      const data = await response.json();
+
       const newAiMessage = {
-        id: messages.length + 2,
-        text: response,
+        id: Date.now() + 1,
+        text: data.reply,
         sender: 'ai',
         timestamp: new Date(),
-        mood: 'supportive'
+        mood: data.mood,
+        isCrisis: data.crisis_mode
       };
 
       setMessages(prev => [...prev, newAiMessage]);
+    } catch (error) {
+      console.error("Error calling backend:", error);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
   };
 
   const handleKeyPress = (e) => {
@@ -137,6 +164,31 @@ import React, { useState, useRef, useEffect } from 'react';
           <span className="text-sm">Coping Tools</span>
         </button>
       </div>
+      {/* Script Preference Toggle */}
+      <div className="bg-white/50 backdrop-blur-sm border-b border-gray-200 py-2 px-4 flex justify-center">
+        <div className="flex bg-gray-100 rounded-lg p-1 shadow-inner">
+          <button
+            onClick={() => setScriptPreference("Auto-Mirror")}
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all duration-200 ${
+              scriptPreference === "Auto-Mirror"
+                ? "bg-indigo-600 text-white shadow-sm"
+                : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            Casual (Mixed)
+          </button>
+          <button
+            onClick={() => setScriptPreference("Native Script")}
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all duration-200 ${
+              scriptPreference === "Native Script"
+                ? "bg-indigo-600 text-white shadow-sm"
+                : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            Native Script
+          </button>
+        </div>
+      </div>
 
       {/* Message Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -149,7 +201,9 @@ import React, { useState, useRef, useEffect } from 'react';
               className={`max-w-xs lg:max-w-md rounded-2xl p-4 ${
                 message.sender === 'user'
                   ? 'bg-indigo-500 text-white'
-                  : 'bg-white text-gray-800 shadow-sm'
+                  : message.isCrisis 
+                    ? 'bg-red-50 border-2 border-red-200 text-red-900 shadow-sm' // Emergency style
+                    : 'bg-white text-gray-800 shadow-sm' // Normal AI style
               }`}
             >
               <p>{message.text}</p>
@@ -166,13 +220,13 @@ import React, { useState, useRef, useEffect } from 'react';
                   <p className="text-xs font-medium text-indigo-600 mb-1">Quick help:</p>
                   <div className="flex space-x-2">
                     <button 
-                      onClick={() => handleQuickAction("Suggest an exercise")}
+                      onClick={() => handleQuickAction("Can you suggest a quick breathing exercise?")}
                       className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-lg hover:bg-indigo-200"
                     >
                       Breathing Exercise
                     </button>
                     <button 
-                      onClick={() => handleQuickAction("I'm feeling anxious")}
+                      onClick={() => handleQuickAction("I am feeling really anxious right now, help me calm down.")}
                       className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-lg hover:bg-indigo-200"
                     >
                       Calming Technique
@@ -214,15 +268,15 @@ import React, { useState, useRef, useEffect } from 'react';
               onChange={(e) => setInputText(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder="Share what's on your mind..."
-              className="w-full px-4 py-3 border border-gray-300 rounded-full focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-4 py-3 border border-gray-300 rounded-full focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
             />
           </div>
           
           <button
             onClick={handleSendMessage}
-            disabled={inputText.trim() === ''}
+            disabled={inputText.trim() === '' || isTyping}
             className={`p-3 rounded-full ${
-              inputText.trim() === '' 
+              inputText.trim() === '' || isTyping
                 ? 'bg-gray-200 text-gray-400' 
                 : 'bg-indigo-600 text-white hover:bg-indigo-700'
             }`}
@@ -247,4 +301,3 @@ import React, { useState, useRef, useEffect } from 'react';
     </div>
   );
 };
-
