@@ -5,6 +5,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
+# For serving static files
+from fastapi.staticfiles import StaticFiles
+
 # --- THE BULLETPROOF IMPORTS ---
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_pinecone import PineconeVectorStore  # Updated to the dedicated package
@@ -18,6 +21,9 @@ load_dotenv()
 
 app = FastAPI()
 
+# Serve static files from the 'public' directory at /public
+app.mount("/public", StaticFiles(directory="public"), name="public")
+
 # THE BRIDGE: Allows React (port 5173) to talk to FastAPI (port 8000)
 app.add_middleware(
     CORSMiddleware,
@@ -28,7 +34,7 @@ app.add_middleware(
 )
 
 # 1. Initialize the "Brain" (Model names verified & stable)
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.7)
+llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite", temperature=0.7)
 
 # 2. Setup Memory (Cloud Vector Database)
 embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
@@ -52,7 +58,8 @@ CORE RULES:
 6. THE "NO-AI" RULE: Never explicitly introduce yourself as an AI, a language model, or a bot unless asked directly. Just exist as a supportive peer.
 7. SCRIPT & LANGUAGE ADAPTATION: The user's output preference is: "{script_preference}". 
 - If the preference is "Auto-Mirror", completely mirror the user's language and alphabet. If they type in Kanglish/Hinglish (English alphabet), reply in conversational Kanglish/Hinglish. If they type in a native script, reply in that native script.
-- If the preference is "Native Script", you MUST translate your reply into the proper regional alphabet (e.g., pure Kannada script, Devanagari) and use formal grammar, regardless of what alphabet the user typed in.
+- If the preference is "Native Script", you MUST first identify the underlying language the user is speaking (e.g., if they type Hinglish, the language is Hindi). Then, you MUST write your reply using the proper, native alphabet of that detected language (if the user types Hindi in English letters, use Devanagari. If the user types Kannada in English letters, use Kannada script).
+8. STRICT MOOD CLASSIFICATION: You must classify the user's mood into exactly one of two words: "neutral" or "concerned". If the user expresses ANY negative emotion (sad, hopeless, stressed, uneasy, anxious), you MUST output "concerned". Do not use any other words.
 
 Long-Term Memory of this user:
 {long_term_context}
@@ -133,6 +140,89 @@ async def chat(request: ChatRequest):
     except Exception as e:
         print(f"🔥 THE REAL ERROR: {str(e)}") 
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- BEHAVIORAL REHEARSAL SIMULATION LOGIC ---
+
+from typing import List, Dict, Optional
+
+class RoleplayRequest(BaseModel):
+    user_id: str
+    message: str
+    history: List[Dict[str, str]] = []
+    scenario: str = ""
+    details: Dict[str, str] = {}
+    is_debrief: bool = False
+
+@app.post("/api/simulate")
+async def simulate_chat(req: RoleplayRequest):
+    try:
+        # --- PHASE 1: THE DEBRIEF (When the user clicks Exit) ---
+        # --- PHASE 1: THE DEBRIEF (When the user clicks Exit) ---
+        if req.is_debrief:
+            # 1. Format the JSON history array into a readable chat transcript
+            transcript = ""
+            for msg in req.history:
+                role = "User" if msg.get("sender") == "user" else "Persona"
+                transcript += f"{role}: {msg.get('text', '')}\n"
+
+            # 2. Inject the transcript into the prompt
+            debrief_prompt = f"""
+            You are MannMitra, an empathetic mental health AI. 
+            The user just completed a 'Behavioral Rehearsal' simulation to practice a difficult conversation.
+            
+            Here is the context they provided before starting:
+            - Goal: {req.details.get('context', 'Unknown')}
+            - Their struggle: {req.details.get('friction', 'Unknown')}
+            
+            Here is the FULL TRANSCRIPT of their roleplay session:
+            {transcript}
+            
+            Task: Provide a warm, constructive debrief based on reading the transcript above. 
+            1. Praise them for doing the hard work of practicing.
+            2. Point out one specific thing they did well in the transcript.
+            3. Point out one area where they got defensive or yielded too quickly, and give them a tip for next time.
+            Keep it under 4 paragraphs. Speak directly to the user as their friend.
+            """
+            
+            # Call Gemini
+            response = llm.invoke(debrief_prompt)
+            return {"response": response.content, "status": "debrief_complete"}
+
+        # --- PHASE 2: THE ACTIVE SIMULATION ---
+        else:
+            # Dynamically build the toxic persona
+            persona_desc = req.details.get('persona', 'a difficult, unreasonable person')
+            context_desc = req.details.get('context', 'a stressful conversation')
+            friction_desc = req.details.get('friction', 'setting boundaries')
+            
+            simulation_prompt = f"""
+            SYSTEM OVERRIDE: You are NO LONGER MannMitra. You are participating in a clinical behavioral rehearsal exercise.
+            
+            YOUR PERSONA: {persona_desc}
+            THE SITUATION: {context_desc}
+            WHAT THE USER STRUGGLES WITH: {friction_desc}
+            
+            RULES OF THE SIMULATION:
+            1. STAY IN CHARACTER 100% OF THE TIME. Never break character to be helpful.
+            2. Be challenging, slightly unreasonable, and push specifically against the user's struggle ({friction_desc}).
+            3. Keep your responses short and conversational (1 to 3 sentences max).
+            4. If the user successfully sets a firm boundary using 'I statements', slowly back down or act dismissive, but do not apologize easily.
+            
+            User's current message: "{req.message}"
+            
+            Your response as the persona:
+            """
+            
+            # Using your existing LangChain LLM directly
+            response = llm.invoke(simulation_prompt)
+            return {"response": response.content, "status": "simulation_active"}
+
+    except Exception as e:
+        print(f"Simulation Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ---------------------------------------------
 
 if __name__ == "__main__":
     import uvicorn

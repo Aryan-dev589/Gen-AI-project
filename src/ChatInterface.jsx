@@ -1,303 +1,242 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { BreathingExercise } from './BreathingExercise';
+import { BilateralStimulation } from './BilateralStimulation';
 
 export const ChatInterface = () => {
+  // State Management
   const [messages, setMessages] = useState([
-    {
-      id: 1,
-      text: "Hi there! I'm MannMitra, your mental wellness companion. How are you feeling today?",
-      sender: 'ai',
-      timestamp: new Date(Date.now() - 100000),
-      mood: 'calm'
-    }
+    { text: "Hi, I'm MannMitra. How are you feeling right now?", sender: "bot", timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
   ]);
-  const [inputText, setInputText] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [scriptPreference, setScriptPreference] = useState("Auto-Mirror");
-  const messagesEndRef = useRef(null);
-  const inputRef = useRef(null);
+  const [input, setInput] = useState('');
+  const [uiTheme, setUiTheme] = useState('neutral'); 
+  const [isLoading, setIsLoading] = useState(false);
+  const [showBreathing, setShowBreathing] = useState(false);
+  const [showVisual, setShowVisual] = useState(false);
+  const [showRainPopup, setShowRainPopup] = useState(false);
+  const [rainAccepted, setRainAccepted] = useState(false);
 
+  // Audio Reference
+  const audioRef = useRef(null);
+
+  // Only show popup when mood changes to concerned and rain is not accepted
+  useEffect(() => {
+    if (uiTheme === 'concerned' && !rainAccepted) {
+      setShowRainPopup(true);
+    }
+    if (uiTheme !== 'concerned') {
+      setShowRainPopup(false);
+      if (rainAccepted) setRainAccepted(false);
+      // Only reset audio if it was showing
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+    }
+    // If uiTheme is concerned and rainAccepted, do nothing (leave audio alone)
+  }, [uiTheme]);
+
+  // Coping Tools Data
   const copingTools = [
-    { id: 1, name: "Breathing Exercise", icon: "🌬️", duration: "5 min" },
-    { id: 2, name: "Quick Meditation", icon: "🧘", duration: "3 min" },
-    { id: 3, name: "Gratitude Journal", icon: "📝", duration: "2 min" },
-    { id: 4, name: "Calming Sounds", icon: "🎵", duration: "..." }
+    { id: 1, name: "Breathing Exercise", icon: "🌬️" },
+    { id: 2, name: "Eye Tracking", icon: "👀" },
+    { id: 3, name: "Calming Technique", icon: "🧘" }
   ];
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
 
-  // --- UPDATED: Now talks to your FastAPI Backend ---
-  const handleSendMessage = async () => {
-    if (inputText.trim() === '') return;
+  // Handle Sending Messages
+  const handleSend = async () => {
+    if (!input.trim()) return;
 
-    const currentText = inputText; // Save text before clearing input
+    const userMsg = { 
+      text: input, 
+      sender: "user", 
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+    };
     
-    // 1. Show User Message Immediately
-    const newUserMessage = {
-      id: Date.now(), // Using Date.now() for unique IDs to prevent rendering bugs
-      text: currentText,
-      sender: 'user',
-      timestamp: new Date()
-    };
-
-    setMessages(prev => [...prev, newUserMessage]);
-    setInputText('');
-    setIsTyping(true);
-
-    try {
-      // 2. Send to FastAPI
-      const response = await fetch('http://localhost:8000/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: "demo_user_1", // Hardcoded for this sprint
-          message: currentText,
-          script_preference: scriptPreference
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error("Backend connection failed");
-      }
-
-      const data = await response.json();
-
-      // 3. Show AI Response
-      const newAiMessage = {
-        id: Date.now() + 1,
-        text: data.reply, // The text Gemini generated
-        sender: 'ai',
-        timestamp: new Date(),
-        mood: data.mood   // The mood Gemini analyzed ('calm' or 'concerned')
-      };
-
-      setMessages(prev => [...prev, newAiMessage]);
-
-    } catch (error) {
-      console.error("Error calling backend:", error);
-      // Fallback if the server is offline
-      setMessages(prev => [...prev, {
-        id: Date.now() + 1,
-        text: "I'm having a little trouble connecting to my servers right now. Please make sure the Python backend is running!",
-        sender: 'ai',
-        timestamp: new Date(),
-        mood: 'calm'
-      }]);
-    } finally {
-      setIsTyping(false);
-    }
-  };
-
-  // --- UPDATED: Quick Actions also talk to the Backend ---
-  const handleQuickAction = async (action) => {
-    const newUserMessage = {
-      id: Date.now(),
-      text: action,
-      sender: 'user',
-      timestamp: new Date()
-    };
-
-    setMessages(prev => [...prev, newUserMessage]);
-    setIsTyping(true);
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
+    setIsLoading(true);
 
     try {
       const response = await fetch('http://localhost:8000/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: "demo_user_1", message: action ,script_preference: scriptPreference})
+        body: JSON.stringify({ 
+          user_id: "test_user_123",
+          message: userMsg.text
+        })
       });
 
-      if (!response.ok) throw new Error("Backend connection failed");
+      if (!response.ok) throw new Error('Network response was not ok');
       
       const data = await response.json();
+      const incomingMood = data.mood || "neutral";
 
-      const newAiMessage = {
-        id: Date.now() + 1,
-        text: data.reply,
-        sender: 'ai',
-        timestamp: new Date(),
-        mood: data.mood,
-        isCrisis: data.crisis_mode
-      };
+      setUiTheme((prevTheme) => {
+        if (incomingMood === "concerned") return "concerned";
+        if (incomingMood === "neutral" && prevTheme === "concerned") return "concerned"; 
+        return incomingMood;
+      });
 
-      setMessages(prev => [...prev, newAiMessage]);
+      setMessages(prev => [...prev, { 
+        text: data.reply || data.response, 
+        sender: "bot", 
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+      }]);
+
     } catch (error) {
-      console.error("Error calling backend:", error);
+      console.error("Error connecting to backend:", error);
+      setMessages(prev => [...prev, { 
+        text: "I'm having trouble connecting to my servers right now. Please ensure the backend is running.", 
+        sender: "bot", 
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+      }]);
     } finally {
-      setIsTyping(false);
+      setIsLoading(false);
     }
   };
 
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
+  // Handler for rain popup
+  const handleRainChoice = (accept) => {
+    setShowRainPopup(false);
+    setRainAccepted(accept);
+    // Only reset audio if user says no
+    if (!accept && audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
     }
-  };
-
-  const formatTime = (date) => {
-    return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-b from-indigo-50 to-purple-50">
-      {/* Header Bar */}
-      <div className="flex items-center justify-between p-4 bg-white border-b border-gray-200">
-        <div className="flex items-center">
-          <div className="relative">
-            <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
-              <span className="text-2xl">💬</span>
+    <div className={`flex flex-col h-full min-h-screen transition-colors duration-700 relative overflow-hidden ${uiTheme === 'concerned' ? 'bg-slate-900 text-slate-200' : 'bg-slate-50 text-slate-800'}`}>
+      {/* Rain Sound Popup */}
+      {showRainPopup && !rainAccepted && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white text-slate-800 rounded-xl p-6 shadow-lg max-w-xs w-full text-center">
+            <h2 className="text-lg font-semibold mb-2">Feeling uneasy?</h2>
+            <p className="mb-4">Would you like some soothing rain sounds to help you relax?</p>
+            <div className="flex justify-center gap-4">
+              <button
+                className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                onClick={() => handleRainChoice(true)}
+              >
+                Yes, play rain
+              </button>
+              <button
+                className="px-4 py-2 bg-slate-300 text-slate-800 rounded hover:bg-slate-400"
+                onClick={() => handleRainChoice(false)}
+              >
+                No, thanks
+              </button>
             </div>
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
-          </div>
-          <div className="ml-3">
-            <h3 className="font-semibold text-gray-800">MannMitra</h3>
-            <p className="text-sm text-gray-500">
-              {isTyping ? 'Thinking...' : 'Online'}
-            </p>
           </div>
         </div>
-        <button className="p-2 bg-indigo-100 text-indigo-600 rounded-lg hover:bg-indigo-200 transition-colors">
-          <span className="text-sm">Coping Tools</span>
-        </button>
-      </div>
-      {/* Script Preference Toggle */}
-      <div className="bg-white/50 backdrop-blur-sm border-b border-gray-200 py-2 px-4 flex justify-center">
-        <div className="flex bg-gray-100 rounded-lg p-1 shadow-inner">
-          <button
-            onClick={() => setScriptPreference("Auto-Mirror")}
-            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all duration-200 ${
-              scriptPreference === "Auto-Mirror"
-                ? "bg-indigo-600 text-white shadow-sm"
-                : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"
-            }`}
-          >
-            Casual (Mixed)
-          </button>
-          <button
-            onClick={() => setScriptPreference("Native Script")}
-            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all duration-200 ${
-              scriptPreference === "Native Script"
-                ? "bg-indigo-600 text-white shadow-sm"
-                : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"
-            }`}
-          >
-            Native Script
-          </button>
-        </div>
+      )}
+
+      {/* Header */}
+      <div className={`p-4 border-b ${uiTheme === 'concerned' ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'} shadow-sm relative z-10`}>
+        <h1 className="text-xl font-semibold tracking-wide">MannMitra Chat</h1>
       </div>
 
-      {/* Message Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-xs lg:max-w-md rounded-2xl p-4 ${
-                message.sender === 'user'
-                  ? 'bg-indigo-500 text-white'
-                  : message.isCrisis 
-                    ? 'bg-red-50 border-2 border-red-200 text-red-900 shadow-sm' // Emergency style
-                    : 'bg-white text-gray-800 shadow-sm' // Normal AI style
-              }`}
-            >
-              <p>{message.text}</p>
-              <p
-                className={`text-xs mt-1 ${
-                  message.sender === 'user' ? 'text-indigo-200' : 'text-gray-500'
-                }`}
-              >
-                {formatTime(message.timestamp)}
-              </p>
-              
-              {message.sender === 'ai' && message.mood === 'concerned' && (
-                <div className="mt-2 pt-2 border-t border-gray-100">
-                  <p className="text-xs font-medium text-indigo-600 mb-1">Quick help:</p>
-                  <div className="flex space-x-2">
-                    <button 
-                      onClick={() => handleQuickAction("Can you suggest a quick breathing exercise?")}
-                      className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-lg hover:bg-indigo-200"
-                    >
-                      Breathing Exercise
-                    </button>
-                    <button 
-                      onClick={() => handleQuickAction("I am feeling really anxious right now, help me calm down.")}
-                      className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-lg hover:bg-indigo-200"
-                    >
-                      Calming Technique
-                    </button>
-                  </div>
-                </div>
-              )}
+      {/* Chat Messages Area */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-40">
+        {messages.map((msg, idx) => (
+          <div key={idx} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[80%] md:max-w-[60%] rounded-2xl p-4 leading-relaxed ${
+              msg.sender === 'user' 
+                ? 'bg-indigo-600 text-white rounded-br-none' 
+                : uiTheme === 'concerned' 
+                  ? 'bg-slate-800 text-slate-200 rounded-bl-none border border-slate-700' 
+                  : 'bg-white text-slate-800 rounded-bl-none border border-slate-200 shadow-sm'
+            }`}>
+              <p>{msg.text}</p>
+              <span className={`text-[10px] block mt-2 text-right ${msg.sender === 'user' ? 'text-indigo-200' : 'opacity-50'}`}>
+                {msg.timestamp}
+              </span>
             </div>
           </div>
         ))}
         
-        {isTyping && (
+        {isLoading && (
           <div className="flex justify-start">
-            <div className="bg-white rounded-2xl p-4 shadow-sm">
-              <div className="flex space-x-1">
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-              </div>
+            <div className={`max-w-[75%] rounded-2xl p-4 rounded-bl-none border animate-pulse ${uiTheme === 'concerned' ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-white border-slate-200 text-slate-500'}`}>
+              Thinking...
             </div>
           </div>
         )}
-        
-        <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area */}
-      <div className="p-4 bg-white border-t border-gray-200">
-        <div className="flex items-center space-x-2">
-          <button className="p-2 text-gray-500 hover:text-indigo-600 rounded-lg hover:bg-indigo-50">
-            <span className="text-xl">🎤</span>
-          </button>
-          
-          <div className="flex-1 relative">
-            <input
-              ref={inputRef}
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Share what's on your mind..."
-              className="w-full px-4 py-3 border border-gray-300 rounded-full focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+      {/* Quick Suggestions Bar */}
+      <div className="px-4 py-2 relative z-10">
+         <div className="mt-3 flex overflow-x-auto space-x-2 pb-2 scrollbar-hide">
+           {copingTools.map(tool => (
+             <button
+               key={tool.id}
+               onClick={() => { 
+                 if (tool.name === "Breathing Exercise") setShowBreathing(true); 
+                 if (tool.name === "Eye Tracking") setShowVisual(true);
+               }}
+               className={`flex-shrink-0 flex items-center space-x-1 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                 uiTheme === 'concerned' 
+                   ? 'bg-indigo-900/50 text-indigo-300 hover:bg-indigo-800/50 border border-indigo-700/50' 
+                   : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200 border border-transparent'
+               }`}
+             >
+               <span>{tool.icon}</span>
+               <span>{tool.name}</span>
+             </button>
+           ))}
+         </div>
+      </div>
+
+
+      {/* Audio Player - place just above input bar */}
+      {uiTheme === 'concerned' && rainAccepted && (
+        <div className="w-full flex flex-col items-center px-4 pb-2">
+          <div className="w-full max-w-md bg-slate-800 border border-slate-700 rounded-xl p-3 mb-2 shadow">
+            <p className="text-xs text-slate-400 mb-2 font-medium tracking-wide text-center">Background Rain Sounds</p>
+            <audio
+              ref={audioRef}
+              src="http://localhost:8000/public/rain.mp3"
+              controls
+              loop
+              className="w-full"
             />
           </div>
-          
-          <button
-            onClick={handleSendMessage}
-            disabled={inputText.trim() === '' || isTyping}
-            className={`p-3 rounded-full ${
-              inputText.trim() === '' || isTyping
-                ? 'bg-gray-200 text-gray-400' 
-                : 'bg-indigo-600 text-white hover:bg-indigo-700'
+        </div>
+      )}
+
+      {/* Input Area */}
+      <div className={`p-4 border-t relative z-10 ${uiTheme === 'concerned' ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'}`}>
+        <div className="flex items-center space-x-3">
+          <input 
+            type="text" 
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+            placeholder="Share what's on your mind..."
+            className={`flex-1 p-3.5 rounded-full border focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${
+              uiTheme === 'concerned'
+                ? 'bg-slate-900 border-slate-700 text-white placeholder-slate-500'
+                : 'bg-slate-50 border-slate-300 text-slate-900 placeholder-slate-400'
             }`}
+          />
+          <button 
+            onClick={handleSend}
+            disabled={isLoading || !input.trim()}
+            className="p-3.5 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
           >
-            <span className="text-xl">➤</span>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
           </button>
         </div>
-        
-        {/* Quick Suggestions */}
-        <div className="mt-3 flex overflow-x-auto space-x-2 pb-1">
-          {copingTools.map(tool => (
-            <button
-              key={tool.id}
-              className="flex-shrink-0 flex items-center space-x-1 bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-full text-sm hover:bg-indigo-200"
-            >
-              <span>{tool.icon}</span>
-              <span>{tool.name}</span>
-            </button>
-          ))}
-        </div>
       </div>
+
+      {/* Visual Intervention Overlays */}
+      {showBreathing && <BreathingExercise onClose={() => setShowBreathing(false)} />}
+      {showVisual && <BilateralStimulation onClose={() => setShowVisual(false)} />}
+
     </div>
   );
 };

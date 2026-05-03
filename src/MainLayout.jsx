@@ -8,17 +8,19 @@ import {
   BookOpen,
   Settings,
   LogOut,
+  Users
 } from 'lucide-react';
- import { ChatInterface } from './ChatInterface';
- import { WellnessToolkit } from './Wellness';
- import { MoodJournal } from './MoodJournal';
- import { MeditationSpace }   from './Meditation';
- import { Resources } from './Resources';
- 
- // Add this import
+import { ChatInterface } from './ChatInterface';
+import { WellnessToolkit } from './Wellness';
+import { MoodJournal } from './MoodJournal';
+import { MeditationSpace }   from './Meditation';
+import { Resources } from './Resources';
+// Import the screen from the same src directory
+import { BehavioralRehearsalScreen } from './BehavioralRehearsalScreen';
 
 const navItems = [
   { id: 'chat', label: 'Chat Companion', icon: MessageSquare },
+  { id: 'rehearsal', label: 'Behavioral Rehearsal', icon: Users }, 
   { id: 'wellness', label: 'Wellness Toolkit', icon: HeartPulse },
   { id: 'mood', label: 'Mood Journal', icon: ClipboardList },
   { id: 'meditation', label: 'Meditation Space', icon: BrainCircuit },
@@ -26,6 +28,7 @@ const navItems = [
 ];
 
 const contentMap = {
+  rehearsal: { title: 'Behavioral Rehearsal', description: 'Select a scenario and practice difficult conversations in a safe environment.' },
   wellness: { title: 'Wellness Toolkit', description: 'Wellness tools and exercises will appear here' },
   mood: { title: 'Mood Journal', description: 'Mood tracking interface will appear here' },
   meditation: { title: 'Meditation Space', description: 'Meditation player will appear here' },
@@ -33,12 +36,11 @@ const contentMap = {
   settings: { title: 'Settings & Privacy', description: 'Settings options will appear here' },
 };
 
-  export const MainLayout = ({ user, onLogout }) => {
+export const MainLayout = ({ user, onLogout }) => {
   const [activeTab, setActiveTab] = useState('chat');
 
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-slate-900 to-black text-gray-300 font-sans">
-      {/* Header */}
       <header className="bg-slate-900/70 backdrop-blur-sm border-b border-slate-700 z-10 flex-shrink-0">
         <div className="flex items-center justify-between px-6 py-3">
           <div className="flex items-center space-x-3">
@@ -50,8 +52,8 @@ const contentMap = {
           
           <div className="flex items-center space-x-4">
             <div className="text-sm text-gray-400">
-              Hi, <span className="font-medium text-white">{user.username}</span>
-              {user.username === 'Guest' && (
+              Hi, <span className="font-medium text-white">{user?.username || 'Aryan'}</span>
+              {user?.username === 'Guest' && (
                 <span className="ml-2 text-xs bg-yellow-400/20 text-yellow-300 px-2 py-1 rounded-full">
                   Guest Mode
                 </span>
@@ -68,21 +70,13 @@ const contentMap = {
         </div>
       </header>
 
-      {/* Main content area */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar/Navigation */}
         <aside className="w-64 bg-slate-800/30 flex flex-col p-4">
           <motion.nav 
             className="flex-1 space-y-2 relative"
             initial="hidden"
             animate="visible"
-            variants={{
-              visible: {
-                transition: {
-                  staggerChildren: 0.05,
-                },
-              },
-            }}
+            variants={{ visible: { transition: { staggerChildren: 0.05 } } }}
           >
             {navItems.map((item) => (
               <NavItem 
@@ -103,20 +97,15 @@ const contentMap = {
           </div>
         </aside>
         
-        {/* Content area */}
         <main className="flex-1 overflow-auto">
           <AnimatePresence mode="wait">
-            {activeTab === 'chat' ? (
-              <ChatInterface /> // Use the full ChatInterface component
-            ) : activeTab === 'wellness' ? (
-              <WellnessToolkit />
-            ) : activeTab === 'mood' ? ( 
-              <MoodJournal />
-            ) : activeTab === 'meditation' ? (
-              <MeditationSpace />
-            ) : activeTab === 'resources' ? (
-              <Resources />
-            ) :  (
+            {activeTab === 'chat' ? <ChatInterface /> 
+            : activeTab === 'rehearsal' ? <BehavioralRehearsalScreen />
+            : activeTab === 'wellness' ? <WellnessToolkit />
+            : activeTab === 'mood' ? <MoodJournal />
+            : activeTab === 'meditation' ? <MeditationSpace />
+            : activeTab === 'resources' ? <Resources />
+            : (
               <motion.div
                 key={activeTab}
                 initial={{ opacity: 0, y: 20 }}
@@ -126,11 +115,10 @@ const contentMap = {
                 className="bg-slate-800/50 backdrop-blur-sm rounded-2xl shadow-lg p-6 h-full flex flex-col m-6"
               >
                 <h2 className="text-2xl font-bold text-white mb-6">
-                  {contentMap[activeTab].title}
+                  {contentMap[activeTab]?.title}
                 </h2>
-                
                 <div className="flex-1 border-2 border-dashed border-slate-700 rounded-lg flex items-center justify-center">
-                  <p className="text-gray-500">{contentMap[activeTab].description}</p>
+                  <p className="text-gray-500">{contentMap[activeTab]?.description}</p>
                 </div>
               </motion.div>
             )}
@@ -143,10 +131,7 @@ const contentMap = {
 
 const NavItem = ({ item, isActive, onClick }) => {
   const Icon = item.icon;
-  const itemVariants = {
-    hidden: { opacity: 0, x: -20 },
-    visible: { opacity: 1, x: 0 },
-  };
+  const itemVariants = { hidden: { opacity: 0, x: -20 }, visible: { opacity: 1, x: 0 } };
 
   return (
     <motion.button
