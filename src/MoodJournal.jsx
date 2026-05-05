@@ -1,362 +1,206 @@
-import React, { useState, useEffect } from 'react';
-import { Calendar, TrendingUp, Plus, X, Smile, Frown, Meh } from 'lucide-react';
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
+import { Sparkles, Save, Calendar as CalendarIcon, BookOpen } from 'lucide-react';
+
+const MOODS = [
+  { id: 'terrible', emoji: '😭', label: 'Terrible', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
+  { id: 'bad', emoji: '🙁', label: 'Bad', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
+  { id: 'neutral', emoji: '😐', label: 'Neutral', color: 'bg-slate-500/20 text-slate-400 border-slate-500/30' },
+  { id: 'good', emoji: '🙂', label: 'Good', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+  { id: 'great', emoji: '🤩', label: 'Great', color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' },
+];
 
 export const MoodJournal = () => {
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [moodEntries, setMoodEntries] = useState([]);
-  const [showEntryForm, setShowEntryForm] = useState(false);
-  const [currentEntry, setCurrentEntry] = useState({
-    mood: '',
-    energy: 5,
-    stress: 5,
-    sleep: 7,
-    notes: '',
-    tags: []
-  });
+  const [selectedMood, setSelectedMood] = useState(null);
+  const [journalText, setJournalText] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  
+  // Mock data until we hook up the backend
+  const [insight, setInsight] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [savedEntries, setSavedEntries] = useState([]);
 
-  // Sample mood data for the current month
-  const [moodCalendar, setMoodCalendar] = useState(() => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = today.getMonth();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const handleSave = async () => {
+    if (!selectedMood) return;
+    setIsSaving(true);
     
-    const calendar = [];
-    for (let i = 1; i <= daysInMonth; i++) {
-      // Random mood data for demonstration
-      const moods = ['happy', 'neutral', 'sad', 'anxious', 'energetic'];
-      const randomMood = moods[Math.floor(Math.random() * moods.length)];
-      const hasEntry = Math.random() > 0.6; // 40% chance of having an entry
+    // Create the local entry object
+    const newEntry = {
+      date: new Date().toLocaleDateString(),
+      mood: selectedMood,
+      text: journalText
+    };
+
+    try {
+      // 1. Send it to FastAPI to store in Pinecone permanently
+      await fetch('http://localhost:8000/api/journal/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: "aryan-dev589", // Using your dev ID
+          mood: newEntry.mood,
+          text: newEntry.text,
+          date: newEntry.date
+        })
+      });
+
+      // 2. Save it to React state so the "Generate Summary" button has immediate context
+      setSavedEntries([...savedEntries, newEntry]); 
       
-      calendar.push({
-        date: new Date(year, month, i),
-        mood: hasEntry ? randomMood : null,
-        energy: hasEntry ? Math.floor(Math.random() * 10) + 1 : null,
-        hasEntry
-      });
-    }
-    return calendar;
-  });
-
-  const moodOptions = [
-    { value: 'excited', label: 'Excited', emoji: '😆', color: 'bg-yellow-400' },
-    { value: 'happy', label: 'Happy', emoji: '😊', color: 'bg-green-400' },
-    { value: 'neutral', label: 'Neutral', emoji: '😐', color: 'bg-blue-400' },
-    { value: 'sad', label: 'Sad', emoji: '😔', color: 'bg-indigo-400' },
-    { value: 'anxious', label: 'Anxious', emoji: '😰', color: 'bg-purple-400' },
-    { value: 'angry', label: 'Angry', emoji: '😠', color: 'bg-red-400' },
-    { value: 'tired', label: 'Tired', emoji: '😴', color: 'bg-gray-400' }
-  ];
-
-  const tagOptions = ['Work', 'Family', 'Friends', 'Health', 'Exercise', 'Nature', 'Creative', 'Chores'];
-
-  useEffect(() => {
-    // Check if we already have an entry for the selected date
-    const existingEntry = moodEntries.find(entry => 
-      new Date(entry.date).toDateString() === selectedDate.toDateString()
-    );
-    
-    if (existingEntry) {
-      setCurrentEntry(existingEntry);
-    } else {
-      setCurrentEntry({
-        mood: '',
-        energy: 5,
-        stress: 5,
-        sleep: 7,
-        notes: '',
-        tags: [],
-        date: selectedDate
-      });
-    }
-  }, [selectedDate, moodEntries]);
-
-  const handleMoodSelect = (moodValue) => {
-    setCurrentEntry({ ...currentEntry, mood: moodValue });
-  };
-
-  const handleTagSelect = (tag) => {
-    if (currentEntry.tags.includes(tag)) {
-      setCurrentEntry({ 
-        ...currentEntry, 
-        tags: currentEntry.tags.filter(t => t !== tag) 
-      });
-    } else {
-      setCurrentEntry({ 
-        ...currentEntry, 
-        tags: [...currentEntry.tags, tag] 
-      });
+      // 3. Clear the form
+      setJournalText('');
+      setSelectedMood(null);
+      alert("Journal entry saved permanently to MannMitra's AI memory!");
+      
+    } catch (error) {
+      console.error("Save API Error:", error);
+      alert("Failed to save. Is your FastAPI server running?");
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleSaveEntry = () => {
-    const newEntry = { ...currentEntry, date: selectedDate };
+  const handleGenerateInsights = async () => {
+    setIsAnalyzing(true);
     
-    // Check if entry already exists for this date
-    const existingIndex = moodEntries.findIndex(entry => 
-      new Date(entry.date).toDateString() === selectedDate.toDateString()
-    );
+    // In a real app, you would fetch these from your database.
+    // For now, we will send some realistic mock history to the AI to analyze!
     
-    if (existingIndex >= 0) {
-      // Update existing entry
-      const updatedEntries = [...moodEntries];
-      updatedEntries[existingIndex] = newEntry;
-      setMoodEntries(updatedEntries);
-    } else {
-      // Add new entry
-      setMoodEntries([...moodEntries, newEntry]);
+
+    try {
+      const response = await fetch('http://localhost:8000/api/journal/insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: "aryan",
+          recent_entries: savedEntries
+        })
+      });
+
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const data = await response.json();
+      
+      if (data.insight) {
+        setInsight(data.insight);
+      }
+    } catch (error) {
+      console.error("Insights API Error:", error);
+      setInsight("System Error: Could not connect to the MannMitra analytical engine. Is your backend running?");
+    } finally {
+      setIsAnalyzing(false);
     }
-    
-    setShowEntryForm(false);
-    // For demo purposes, show a success message
-    alert('Mood entry saved successfully!');
   };
-
-  const getMoodColor = (mood) => {
-    const moodConfig = moodOptions.find(option => option.value === mood);
-    return moodConfig ? moodConfig.color : 'bg-gray-200';
-  };
-
-  const getMoodEmoji = (mood) => {
-    const moodConfig = moodOptions.find(option => option.value === mood);
-    return moodConfig ? moodConfig.emoji : '';
-  };
-
-  const formatDate = (date) => {
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'short', 
-      month: 'short', 
-      day: 'numeric' 
-    });
-  };
-
-  // Check if selected date has an entry
-  const hasEntryForSelectedDate = moodEntries.some(entry => 
-    new Date(entry.date).toDateString() === selectedDate.toDateString()
-  );
 
   return (
-    <div className="h-full flex flex-col bg-white p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">Mood Journal</h2>
-        <button
-          onClick={() => setShowEntryForm(true)}
-          className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          New Entry
-        </button>
+    <div className="h-full flex flex-col p-6 max-w-5xl mx-auto w-full animate-fade-in overflow-y-auto">
+      
+      <div className="mb-8">
+        <h2 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
+          <BookOpen className="text-indigo-400" />
+          Mood Journal
+        </h2>
+        <p className="text-slate-400">Track your emotional state and let AI find patterns in your well-being.</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
-        {/* Calendar View */}
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <h3 className="font-semibold text-lg mb-4 flex items-center">
-            <Calendar className="w-5 h-5 mr-2" />
-            Mood Calendar
-          </h3>
-          <div className="grid grid-cols-7 gap-1 mb-4">
-            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(day => (
-              <div key={day} className="text-center text-sm font-medium text-gray-500 py-1">
-                {day}
-              </div>
-            ))}
-            {moodCalendar.map(day => (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Left Column: Logging Form */}
+        <div className="lg:col-span-2 space-y-6">
+          
+          {/* Mood Selector */}
+          <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 border border-slate-700 shadow-lg">
+            <h3 className="text-lg font-semibold text-slate-200 mb-4 flex items-center gap-2">
+              <CalendarIcon size={18} className="text-slate-400" />
+              How are you feeling today?
+            </h3>
+            
+            <div className="grid grid-cols-5 gap-2 sm:gap-4">
+              {MOODS.map((mood) => (
+                <button
+                  key={mood.id}
+                  onClick={() => setSelectedMood(mood.id)}
+                  className={`flex flex-col items-center justify-center p-3 sm:p-4 rounded-xl border transition-all duration-200 ${
+                    selectedMood === mood.id 
+                      ? `${mood.color} ring-2 ring-offset-2 ring-offset-slate-900 ring-indigo-500 scale-105` 
+                      : 'bg-slate-900/50 border-slate-700 hover:bg-slate-700/50 text-slate-400'
+                  }`}
+                >
+                  <span className="text-2xl sm:text-3xl mb-1 sm:mb-2">{mood.emoji}</span>
+                  <span className="text-[10px] sm:text-xs font-medium uppercase tracking-wider">{mood.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Journal Entry Area */}
+          <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 border border-slate-700 shadow-lg flex flex-col flex-1">
+            <h3 className="text-lg font-semibold text-slate-200 mb-4">
+              What's on your mind?
+            </h3>
+            <textarea
+              value={journalText}
+              onChange={(e) => setJournalText(e.target.value)}
+              placeholder="Write whatever you're feeling right now. This is a safe, private space..."
+              className="w-full flex-1 min-h-[200px] bg-slate-900/80 border border-slate-600 rounded-xl p-4 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-none transition-colors"
+            />
+            <div className="mt-4 flex justify-end">
               <button
-                key={day.date.getDate()}
-                onClick={() => setSelectedDate(day.date)}
-                className={`p-2 rounded-lg text-center text-sm transition-all ${
-                  day.date.getDate() === selectedDate.getDate() &&
-                  day.date.getMonth() === selectedDate.getMonth()
-                    ? 'ring-2 ring-indigo-500 ring-offset-2'
-                    : 'hover:bg-gray-200'
-                } ${
-                  day.hasEntry ? getMoodColor(day.mood) : 'bg-white'
-                }`}
+                onClick={handleSave}
+                disabled={!selectedMood || isSaving}
+                className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg font-medium transition-colors"
               >
-                <div className="h-6 w-6 flex items-center justify-center mx-auto">
-                  {day.hasEntry ? getMoodEmoji(day.mood) : day.date.getDate()}
-                </div>
+                <Save size={18} />
+                {isSaving ? 'Saving...' : 'Save Entry'}
               </button>
-            ))}
+            </div>
+          </div>
+
+        </div>
+
+        {/* Right Column: AI Insights */}
+        <div className="lg:col-span-1 space-y-6">
+          <div className="bg-gradient-to-b from-indigo-900/20 to-slate-800/50 rounded-2xl p-6 border border-indigo-500/20 shadow-lg h-full flex flex-col relative overflow-hidden">
+            
+            {/* Background decoration */}
+            <div className="absolute -top-10 -right-10 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+
+            <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+              <Sparkles className="text-indigo-400" />
+              AI Insights
+            </h3>
+            <p className="text-sm text-slate-400 mb-6 leading-relaxed">
+              MannMitra can securely analyze your past journal entries to identify emotional triggers and positive patterns.
+            </p>
+
+            {insight ? (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }} 
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-slate-900/60 border border-indigo-500/30 rounded-xl p-5 text-sm text-indigo-100 leading-relaxed shadow-inner"
+              >
+                {insight}
+              </motion.div>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-slate-700 rounded-xl">
+                <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4">
+                  <span className="text-2xl">🧠</span>
+                </div>
+                <p className="text-slate-500 text-sm mb-4">
+                  Unlock patterns in your mental well-being over time.
+                </p>
+                <button 
+                  onClick={handleGenerateInsights}
+                  disabled={isAnalyzing}
+                  className="w-full px-4 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/50 text-indigo-300 rounded-lg font-medium transition-colors text-sm"
+                >
+                  {isAnalyzing ? 'Analyzing patterns...' : 'Generate Weekly Summary'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Entry Form */}
-        <div className="lg:col-span-2 bg-white border border-gray-200 rounded-lg p-6">
-          {showEntryForm ? (
-            <div>
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-semibold">
-                  {hasEntryForSelectedDate ? 'Edit Entry' : 'New Entry'} for {formatDate(selectedDate)}
-                </h3>
-                <button
-                  onClick={() => setShowEntryForm(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="space-y-6">
-                {/* Mood Selection */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    How are you feeling?
-                  </label>
-                  <div className="grid grid-cols-4 gap-3">
-                    {moodOptions.map(mood => (
-                      <button
-                        key={mood.value}
-                        onClick={() => handleMoodSelect(mood.value)}
-                        className={`flex flex-col items-center p-3 rounded-lg border-2 transition-all ${
-                          currentEntry.mood === mood.value
-                            ? 'border-indigo-500 bg-indigo-50'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <span className="text-2xl mb-1">{mood.emoji}</span>
-                        <span className="text-xs text-gray-600">{mood.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Sliders */}
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Energy Level: {currentEntry.energy}/10
-                    </label>
-                    <input
-                      type="range"
-                      min="1"
-                      max="10"
-                      value={currentEntry.energy}
-                      onChange={(e) => setCurrentEntry({ ...currentEntry, energy: parseInt(e.target.value) })}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Stress Level: {currentEntry.stress}/10
-                    </label>
-                    <input
-                      type="range"
-                      min="1"
-                      max="10"
-                      value={currentEntry.stress}
-                      onChange={(e) => setCurrentEntry({ ...currentEntry, stress: parseInt(e.target.value) })}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Sleep Hours: {currentEntry.sleep} hours
-                    </label>
-                    <input
-                      type="range"
-                      min="0"
-                      max="12"
-                      value={currentEntry.sleep}
-                      onChange={(e) => setCurrentEntry({ ...currentEntry, sleep: parseInt(e.target.value) })}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    />
-                  </div>
-                </div>
-
-                {/* Tags */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Tags (what affected your mood?)
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {tagOptions.map(tag => (
-                      <button
-                        key={tag}
-                        onClick={() => handleTagSelect(tag)}
-                        className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                          currentEntry.tags.includes(tag)
-                            ? 'bg-indigo-100 text-indigo-800 border border-indigo-300'
-                            : 'bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200'
-                        }`}
-                      >
-                        {tag}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Notes */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Notes
-                  </label>
-                  <textarea
-                    value={currentEntry.notes}
-                    onChange={(e) => setCurrentEntry({ ...currentEntry, notes: e.target.value })}
-                    placeholder="What's affecting your mood? Any specific thoughts or events?"
-                    rows={4}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
-
-                {/* Save Button */}
-                <button
-                  onClick={handleSaveEntry}
-                  disabled={!currentEntry.mood}
-                  className={`w-full py-3 rounded-lg font-semibold transition-colors ${
-                    !currentEntry.mood
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                  }`}
-                >
-                  Save Entry
-                </button>
-              </div>
-            </div>
-          ) : (
-            /* Journal Overview */
-            <div className="text-center py-12">
-              <div className="w-24 h-24 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <TrendingUp className="w-12 h-12 text-indigo-600" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-800 mb-2">Mood Journal</h3>
-              <p className="text-gray-600 mb-6">
-                Track your moods, identify patterns, and understand your emotional well-being over time.
-              </p>
-              <button
-                onClick={() => setShowEntryForm(true)}
-                className="px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
-              >
-                {hasEntryForSelectedDate ? 'Edit Today\'s Entry' : 'Add Today\'s Entry'}
-              </button>
-              
-              {moodEntries.length > 0 && (
-                <div className="mt-8 text-left">
-                  <h4 className="font-semibold mb-3">Recent Entries</h4>
-                  <div className="space-y-2">
-                    {moodEntries.slice(-3).reverse().map((entry, index) => (
-                      <div key={index} className="p-3 bg-gray-50 rounded-lg flex items-center">
-                        <span className="text-2xl mr-3">{getMoodEmoji(entry.mood)}</span>
-                        <div>
-                          <div className="font-medium">{formatDate(new Date(entry.date))}</div>
-                          <div className="text-sm text-gray-600">
-                            Energy: {entry.energy}/10 • Stress: {entry.stress}/10
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
 };
-

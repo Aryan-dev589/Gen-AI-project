@@ -46,7 +46,7 @@ memory = ConversationBufferWindowMemory(k=5, memory_key="chat_history", input_ke
 
 # 4. The "MannMitra" Persona Definition
 prompt_template = PromptTemplate(
-    input_variables=["chat_history", "long_term_context", "user_input","scipt_preference"],
+    input_variables=["chat_history", "long_term_context", "user_input","script_preference"],
     template="""You are MannMitra, a highly empathetic, non-judgmental friend talking to a college student in India. 
 
 CORE RULES:
@@ -71,7 +71,7 @@ User's Current Message:
 {user_input}
 
 Your friendly response:"""
-)
+)  
 
 chat_chain = LLMChain(llm=llm, prompt=prompt_template, memory=memory)
 
@@ -158,7 +158,6 @@ class RoleplayRequest(BaseModel):
 async def simulate_chat(req: RoleplayRequest):
     try:
         # --- PHASE 1: THE DEBRIEF (When the user clicks Exit) ---
-        # --- PHASE 1: THE DEBRIEF (When the user clicks Exit) ---
         if req.is_debrief:
             # 1. Format the JSON history array into a readable chat transcript
             transcript = ""
@@ -187,6 +186,8 @@ async def simulate_chat(req: RoleplayRequest):
             
             # Call Gemini
             response = llm.invoke(debrief_prompt)
+            memory_chunk = f"User completed a behavioral rehearsal about: {req.details.get('friction', 'setting boundaries')}. Transcript: {transcript}. Feedback given: {response.content}"
+            vector_db.add_texts([memory_chunk])
             return {"response": response.content, "status": "debrief_complete"}
 
         # --- PHASE 2: THE ACTIVE SIMULATION ---
@@ -196,23 +197,44 @@ async def simulate_chat(req: RoleplayRequest):
             context_desc = req.details.get('context', 'a stressful conversation')
             friction_desc = req.details.get('friction', 'setting boundaries')
             
-            simulation_prompt = f"""
-            SYSTEM OVERRIDE: You are NO LONGER MannMitra. You are participating in a clinical behavioral rehearsal exercise.
-            
-            YOUR PERSONA: {persona_desc}
-            THE SITUATION: {context_desc}
-            WHAT THE USER STRUGGLES WITH: {friction_desc}
-            
-            RULES OF THE SIMULATION:
-            1. STAY IN CHARACTER 100% OF THE TIME. Never break character to be helpful.
-            2. Be challenging, slightly unreasonable, and push specifically against the user's struggle ({friction_desc}).
-            3. Keep your responses short and conversational (1 to 3 sentences max).
-            4. If the user successfully sets a firm boundary using 'I statements', slowly back down or act dismissive, but do not apologize easily.
-            
-            User's current message: "{req.message}"
-            
-            Your response as the persona:
-            """
+            # --- FEATURE 1: ROLE REVERSAL BRAIN SWAP ---
+            if req.scenario == "Role Reversal":
+                simulation_prompt = f"""
+                SYSTEM OVERRIDE: You are participating in a clinical behavioral rehearsal exercise.
+                
+                YOUR ROLE: You are playing the calm, collected USER.
+                THE HUMAN TYPING TO YOU: They are playing the "difficult person" ({persona_desc}).
+                THE SITUATION: {context_desc}
+                WHAT YOU ARE SUPPOSED TO MODEL: {friction_desc}
+                
+                RULES OF THE SIMULATION:
+                1. Act like a polite, calm person trying to set healthy boundaries.
+                2. Use "I" statements (e.g., "I feel overwhelmed when...").
+                3. Do NOT be rude or difficult. You are modeling good communication behavior for the user to learn from.
+                4. Keep your responses short and conversational (1-2 sentences).
+                
+                Human (acting as difficult person): "{req.message}"
+                
+                Your polite, boundary-setting response:
+                """
+            else:
+                simulation_prompt = f"""
+                SYSTEM OVERRIDE: You are NO LONGER MannMitra. You are participating in a clinical behavioral rehearsal exercise.
+                
+                YOUR PERSONA: {persona_desc}
+                THE SITUATION: {context_desc}
+                WHAT THE USER STRUGGLES WITH: {friction_desc}
+                
+                RULES OF THE SIMULATION:
+                1. STAY IN CHARACTER 100% OF THE TIME. Never break character to be helpful.
+                2. Be challenging, slightly unreasonable, and push specifically against the user's struggle ({friction_desc}).
+                3. Keep your responses short and conversational (1 to 3 sentences max).
+                4. If the user successfully sets a firm boundary using 'I statements', slowly back down or act dismissive, but do not apologize easily.
+                
+                User's current message: "{req.message}"
+                
+                Your response as the persona:
+                """
             
             # Using your existing LangChain LLM directly
             response = llm.invoke(simulation_prompt)
@@ -220,9 +242,98 @@ async def simulate_chat(req: RoleplayRequest):
 
     except Exception as e:
         print(f"Simulation Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))    
+    
+class SaveJournalRequest(BaseModel):
+    user_id: str
+    mood: str
+    text: str
+    date: str
 
-# ---------------------------------------------
+@app.post("/api/journal/save")
+async def save_journal_entry(req: SaveJournalRequest):
+    try:
+        # Tag it clearly as a journal entry so the AI doesn't confuse it with a chat message
+        memory_chunk = f"[JOURNAL ENTRY] Date: {req.date} | Mood: {req.mood.upper()} | Text: {req.text}"
+        
+        # Save it permanently to Pinecone
+        vector_db.add_texts([memory_chunk])
+        
+        return {"status": "success", "message": "Saved to Vector DB"}
+    
+    
+    except Exception as e:
+        print(f"Journal Save Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))                                           
+
+# --- MOOD JOURNAL & AI INSIGHTS LOGIC ---
+
+class JournalEntry(BaseModel):
+    mood: str
+    text: str
+    date: str
+
+class InsightRequest(BaseModel):
+    user_id: str
+    recent_entries: List[JournalEntry]
+
+@app.post("/api/journal/insights")
+async def generate_insights(req: InsightRequest):
+    try:
+        formatted_log = ""
+        search_query = ""
+        
+        # 1. Check if the user actually provided journal entries
+        if req.recent_entries:
+            for i, entry in enumerate(req.recent_entries):
+                # Only add if they actually typed text, not just a blank submission
+                if entry.text and entry.text.strip():
+                    formatted_log += f"Date: {entry.date} | Mood: {entry.mood.upper()} | Notes: '{entry.text}'\n"
+                    search_query += f"{entry.text} " 
+        
+        # 2. THE FALLBACK: If the user didn't write anything, use a Master Query
+        if not search_query.strip():
+            search_query = "overall emotional state, recent struggles, challenges, achievements, relationships, and mental well-being"
+            formatted_log = "User did not log any specific journal entries this week. Rely purely on their chat history and roleplay simulations."
+
+        # 3. Retrieve from Pinecone (Bumped k=5 to give a broader summary)
+        docs = vector_db.similarity_search(search_query, k=5)
+        past_context = "\n".join([doc.page_content for doc in docs]) if docs else "No past conversations found. The user is new."
+
+        # --- FEATURE 2: DEBUG INTERCEPTOR PRINT STATEMENTS ---
+        print("\n=== DEBUG: WHAT PINECONE HANDED TO GEMINI ===")
+        print(f"Search Query used: '{search_query}'")
+        print("Retrieved Chunks:")
+        print(past_context)
+        print("=============================================\n")
+
+        # 4. The Adaptive Master Prompt
+        insight_prompt = f"""
+        You are MannMitra, an elite, empathetic clinical AI.
+        Your task is to provide a "Holistic Mental State Summary". 
+        
+        [SOURCE 1: RECENT MOOD JOURNAL ENTRIES]
+        {formatted_log}
+        
+        [SOURCE 2: RECENT CONVERSATIONS & ROLEPLAYS (from Vector DB)]
+        {past_context}
+        
+        Instructions for your analysis:
+        1. If Source 1 is empty, base your entire analysis on the themes, struggles, and progress found in Source 2.
+        2. EXPLICIT ROLEPLAY RULE: If the user's journal (Source 1) mentions a struggle that matches a past Behavioral Rehearsal simulation found in Source 2, YOU MUST EXPLICITLY MENTION the simulation. (e.g., "I see you're struggling with your boss today. Remember in our roleplay session when you practiced...").
+        3. Identify Patterns: Point out recurring emotional triggers, stressors, or positive coping mechanisms you see in their history.
+        4. Actionable Advice: Give exactly ONE specific, gentle recommendation for the upcoming week based on this data.
+        5. Keep your response under 3 concise paragraphs. Speak directly to the user in a warm, encouraging, peer-like tone.
+        """
+        
+        # 5. Call Gemini
+        response = llm.invoke(insight_prompt)
+        
+        return {"insight": response.content, "status": "success"}
+
+    except Exception as e:
+        print(f"Holistic Insight Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
