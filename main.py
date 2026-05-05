@@ -22,7 +22,7 @@ load_dotenv()
 app = FastAPI()
 
 # Serve static files from the 'public' directory at /public
-app.mount("/public", StaticFiles(directory="public"), name="public")
+app.mount("/public", StaticFiles(directory="../public"), name="public")
 
 # THE BRIDGE: Allows React (port 5173) to talk to FastAPI (port 8000)
 app.add_middleware(

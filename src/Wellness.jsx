@@ -97,7 +97,7 @@ export const WellnessToolkit = () => {
   const audioRef = useRef(null);
 
   // Placeholder audio
-  const audioSource = "/rain.mp3"; 
+  const audioSource = "http://localhost:8000/public/rain.mp3"; 
 
   const toggleAudio = () => {
     if (isPlayingAudio) {
