@@ -202,37 +202,40 @@ async def simulate_chat(req: RoleplayRequest):
                 simulation_prompt = f"""
                 SYSTEM OVERRIDE: You are participating in a clinical behavioral rehearsal exercise.
                 
-                YOUR ROLE: You are playing the calm, collected USER.
-                THE HUMAN TYPING TO YOU: They are playing the "difficult person" ({persona_desc}).
+                CRITICAL ROLE ASSIGNMENT:
+                - YOU ARE PLAYING: The calm, collected USER.
+                - THE HUMAN TYPING TO YOU IS PLAYING: The "difficult person" ({persona_desc}).
+                
                 THE SITUATION: {context_desc}
                 WHAT YOU ARE SUPPOSED TO MODEL: {friction_desc}
                 
                 RULES OF THE SIMULATION:
                 1. Act like a polite, calm person trying to set healthy boundaries.
                 2. Use "I" statements (e.g., "I feel overwhelmed when...").
-                3. Do NOT be rude or difficult. You are modeling good communication behavior for the user to learn from.
+                3. Do NOT be rude or difficult. You are modeling good communication behavior.
                 4. Keep your responses short and conversational (1-2 sentences).
                 
                 Human (acting as difficult person): "{req.message}"
-                
                 Your polite, boundary-setting response:
                 """
             else:
                 simulation_prompt = f"""
                 SYSTEM OVERRIDE: You are NO LONGER MannMitra. You are participating in a clinical behavioral rehearsal exercise.
                 
-                YOUR PERSONA: {persona_desc}
+                CRITICAL ROLE ASSIGNMENT:
+                - YOU ARE PLAYING: {persona_desc}
+                - THE HUMAN TYPING TO YOU IS PLAYING: Themselves (The person trying to navigate this situation).
+                
                 THE SITUATION: {context_desc}
-                WHAT THE USER STRUGGLES WITH: {friction_desc}
+                WHAT THE HUMAN STRUGGLES WITH: {friction_desc}
                 
                 RULES OF THE SIMULATION:
-                1. STAY IN CHARACTER 100% OF THE TIME. Never break character to be helpful.
-                2. Be challenging, slightly unreasonable, and push specifically against the user's struggle ({friction_desc}).
-                3. Keep your responses short and conversational (1 to 3 sentences max).
-                4. If the user successfully sets a firm boundary using 'I statements', slowly back down or act dismissive, but do not apologize easily.
+                1. YOU ARE NOT THE USER. You are the OTHER person in this conflict. (e.g., If the situation is about owing money, YOU owe the money and the human is asking for it).
+                2. STAY IN CHARACTER 100% OF THE TIME. Never break character to be helpful.
+                3. Be challenging, slightly unreasonable, and push specifically against the user's struggle.
+                4. Keep your responses short and conversational (1 to 3 sentences max).
                 
-                User's current message: "{req.message}"
-                
+                Human's current message: "{req.message}"
                 Your response as the persona:
                 """
             
@@ -261,7 +264,7 @@ async def save_journal_entry(req: SaveJournalRequest):
         
         return {"status": "success", "message": "Saved to Vector DB"}
     
-    
+
     except Exception as e:
         print(f"Journal Save Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))                                           
