@@ -1,297 +1,198 @@
-import React, { useState } from 'react';
-import { Play, Pause, RotateCcw, Timer, Heart, BookOpen, Activity, Wind } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
 
- export const WellnessToolkit = () => {
-  const [activeTool, setActiveTool] = useState(null);
-  const [journalEntry, setJournalEntry] = useState('');
-  const [gratitudeList, setGratitudeList] = useState(['', '', '']);
-  const [breathingActive, setBreathingActive] = useState(false);
-  const [breathingPhase, setBreathingPhase] = useState('inhale');
-  const [breathingProgress, setBreathingProgress] = useState(0);
+// --- 1. THE BOX BREATHING COMPONENT ---
+const BoxBreathing = () => {
+  const [phase, setPhase] = useState('Inhale');
+  const [timeLeft, setTimeLeft] = useState(4);
 
-  const tools = [
-    {
-      id: 'breathing',
-      title: 'Breathing Exercise',
-      icon: <Wind className="w-6 h-6" />,
-      color: 'bg-blue-500',
-      description: 'Calm your mind with guided breathing'
-    },
-    {
-      id: 'meditation',
-      title: 'Quick Meditation',
-      icon: <Activity className="w-6 h-6" />,
-      color: 'bg-purple-500',
-      description: '5-minute mindfulness meditation'
-    },
-    {
-      id: 'gratitude',
-      title: 'Gratitude Journal',
-      icon: <Heart className="w-6 h-6" />,
-      color: 'bg-pink-500',
-      description: 'Focus on the positive things'
-    },
-    {
-      id: 'reflection',
-      title: 'Daily Reflection',
-      icon: <BookOpen className="w-6 h-6" />,
-      color: 'bg-green-500',
-      description: 'Reflect on your day'
-    }
-  ];
-
-  const breathingPhases = [
-    { name: 'inhale', duration: 4000, text: 'Breathe In', instruction: 'Slowly inhale through your nose' },
-    { name: 'hold', duration: 2000, text: 'Hold', instruction: 'Hold your breath' },
-    { name: 'exhale', duration: 6000, text: 'Breathe Out', instruction: 'Slowly exhale through your mouth' },
-    { name: 'rest', duration: 2000, text: 'Rest', instruction: 'Relax before next cycle' }
-  ];
-
-  const meditations = [
-    {
-      title: 'Body Scan',
-      duration: '5 min',
-      description: 'Progressive relaxation from head to toe'
-    },
-    {
-      title: 'Mindfulness',
-      duration: '3 min',
-      description: 'Present moment awareness practice'
-    },
-    {
-      title: 'Loving-Kindness',
-      duration: '7 min',
-      description: 'Cultivate compassion for yourself and others'
-    }
-  ];
-
-  const startBreathingExercise = () => {
-    setBreathingActive(true);
-    setBreathingPhase('inhale');
-    setBreathingProgress(0);
-  };
-
-  const handleGratitudeChange = (index, value) => {
-    const newList = [...gratitudeList];
-    newList[index] = value;
-    setGratitudeList(newList);
-  };
-
-  const renderToolContent = () => {
-    switch (activeTool) {
-      case 'breathing':
-        return (
-          <div className="text-center p-6">
-            <h3 className="text-2xl font-bold mb-4">Breathing Exercise</h3>
-            <p className="text-gray-600 mb-6">Follow the rhythm to calm your nervous system</p>
-            
-            <div className="relative w-64 h-64 mx-auto mb-8">
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div 
-                  className={`rounded-full transition-all duration-1000 ${
-                    breathingPhase === 'inhale' ? 'bg-blue-200' : 
-                    breathingPhase === 'exhale' ? 'bg-blue-800' : 'bg-blue-400'
-                  }`}
-                  style={{
-                    width: `${breathingPhase === 'inhale' ? 100 : breathingPhase === 'exhale' ? 20 : 60}%`,
-                    height: `${breathingPhase === 'inhale' ? 100 : breathingPhase === 'exhale' ? 20 : 60}%`,
-                  }}
-                ></div>
-              </div>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-2xl font-bold text-white">
-                  {breathingPhases.find(phase => phase.name === breathingPhase)?.text}
-                </span>
-              </div>
-            </div>
-            
-            <p className="text-lg mb-4">
-              {breathingPhases.find(phase => phase.name === breathingPhase)?.instruction}
-            </p>
-            
-            {!breathingActive ? (
-              <button
-                onClick={startBreathingExercise}
-                className="px-6 py-3 bg-blue-600 text-white rounded-full font-semibold hover:bg-blue-700 transition-colors"
-              >
-                Start Breathing Exercise
-              </button>
-            ) : (
-              <button
-                onClick={() => setBreathingActive(false)}
-                className="px-6 py-3 bg-red-600 text-white rounded-full font-semibold hover:bg-red-700 transition-colors"
-              >
-                Stop Exercise
-              </button>
-            )}
-          </div>
-        );
-      
-      case 'meditation':
-        return (
-          <div className="p-6">
-            <h3 className="text-2xl font-bold mb-6">Guided Meditations</h3>
-            <div className="grid gap-4">
-              {meditations.map((meditation, index) => (
-                <div key={index} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                  <div className="flex justify-between items-start mb-2">
-                    <h4 className="font-semibold text-lg">{meditation.title}</h4>
-                    <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-sm">
-                      {meditation.duration}
-                    </span>
-                  </div>
-                  <p className="text-gray-600 mb-3">{meditation.description}</p>
-                  <button className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 transition-colors">
-                    Start Meditation
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      
-      case 'gratitude':
-        return (
-          <div className="p-6">
-            <h3 className="text-2xl font-bold mb-4">Gratitude Journal</h3>
-            <p className="text-gray-600 mb-6">List three things you're grateful for today</p>
-            
-            <div className="space-y-4">
-              {gratitudeList.map((item, index) => (
-                <div key={index} className="flex items-center">
-                  <span className="mr-3 text-2xl">✨</span>
-                  <input
-                    type="text"
-                    value={item}
-                    onChange={(e) => handleGratitudeChange(index, e.target.value)}
-                    placeholder={`Gratitude #${index + 1}`}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                  />
-                </div>
-              ))}
-            </div>
-            
-            <button className="mt-6 px-6 py-3 bg-pink-600 text-white rounded-lg font-semibold hover:bg-pink-700 transition-colors">
-              Save Gratitude List
-            </button>
-          </div>
-        );
-      
-      case 'reflection':
-        return (
-          <div className="p-6">
-            <h3 className="text-2xl font-bold mb-4">Daily Reflection</h3>
-            <p className="text-gray-600 mb-6">Take a moment to reflect on your day</p>
-            
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                How are you feeling today?
-              </label>
-              <div className="flex space-x-2">
-                {['😢', '😐', '😊', '😁'].map((emoji, index) => (
-                  <button
-                    key={index}
-                    className="text-2xl p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors"
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-            </div>
-            
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Today's reflection
-              </label>
-              <textarea
-                value={journalEntry}
-                onChange={(e) => setJournalEntry(e.target.value)}
-                placeholder="What's on your mind today?"
-                rows={4}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-              />
-            </div>
-            
-            <button className="px-6 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors">
-              Save Reflection
-            </button>
-          </div>
-        );
-      
-      default:
-        return (
-          <div className="text-center py-12">
-            <div className="w-24 h-24 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Heart className="w-12 h-12 text-indigo-600" />
-            </div>
-            <h3 className="text-2xl font-bold text-gray-800 mb-2">Wellness Toolkit</h3>
-            <p className="text-gray-600">Select a tool to support your mental well-being</p>
-          </div>
-        );
-    }
-  };
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev === 1) {
+          if (phase === 'Inhale') {
+            setPhase('Hold');
+            return 4; // Hold for 4s
+          } else if (phase === 'Hold') {
+            setPhase('Exhale');
+            return 5; // Exhale for 5s
+          } else {
+            setPhase('Inhale');
+            return 4; // Inhale for 4s
+          }
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, [phase]);
 
   return (
-    <div className="h-full flex flex-col bg-white">
-      {/* Header */}
-      <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-800">Wellness Toolkit</h2>
-          {activeTool && (
-            <button
-              onClick={() => setActiveTool(null)}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-            >
-              Back to Tools
-            </button>
-          )}
+    <div className="flex flex-col items-center justify-center text-center w-full animate-fade-in">
+      {/* The Breathing Circle */}
+      <div className="relative flex items-center justify-center w-64 h-64 mb-12 mt-4">
+        <div 
+          className={`absolute w-48 h-48 rounded-full bg-indigo-500/20 border-2 border-indigo-400/50 transition-all duration-1000 ease-in-out ${
+            phase === 'Inhale' ? 'scale-150 opacity-100' : 
+            phase === 'Hold' ? 'scale-150 opacity-80' : 
+            'scale-75 opacity-40'
+          }`}
+        />
+        <div className="absolute z-10 flex flex-col items-center justify-center">
+          <span className="text-3xl font-bold text-indigo-300 tracking-wider mb-2 uppercase">{phase}</span>
+          <span className="text-5xl font-light text-white">{timeLeft}</span>
         </div>
       </div>
 
-      {/* Content Area */}
-      <div className="flex-1 overflow-auto">
-        {!activeTool ? (
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {tools.map((tool) => (
-                <button
-                  key={tool.id}
-                  onClick={() => setActiveTool(tool.id)}
-                  className={`p-6 rounded-xl text-left transition-all hover:shadow-md ${tool.color} bg-opacity-10 hover:bg-opacity-20`}
-                >
-                  <div className={`w-12 h-12 ${tool.color} rounded-full flex items-center justify-center mb-4`}>
-                    {tool.icon}
-                  </div>
-                  <h3 className="font-semibold text-lg mb-2">{tool.title}</h3>
-                  <p className="text-gray-600">{tool.description}</p>
-                </button>
-              ))}
-            </div>
-
-            {/* Quick Actions */}
-            <div className="mt-12">
-              <h3 className="text-xl font-bold mb-4">Quick Relaxation Techniques</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <h4 className="font-semibold mb-2">5-4-3-2-1 Grounding</h4>
-                  <p className="text-sm text-gray-600">Notice 5 things you can see, 4 things you can touch, 3 things you can hear, 2 things you can smell, and 1 thing you can taste.</p>
-                </div>
-                <div className="p-4 bg-green-50 rounded-lg">
-                  <h4 className="font-semibold mb-2">Progressive Muscle Relaxation</h4>
-                  <p className="text-sm text-gray-600">Tense and then relax each muscle group in your body, starting from your toes and working up to your head.</p>
-                </div>
-                <div className="p-4 bg-purple-50 rounded-lg">
-                  <h4 className="font-semibold mb-2">Mindful Breathing</h4>
-                  <p className="text-sm text-gray-600">Focus your attention on your breath. When your mind wanders, gently bring it back to your breathing.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div>{renderToolContent()}</div>
-        )}
-      </div>
+      <p className="text-slate-400 text-sm max-w-[250px] leading-relaxed mx-auto">
+        Focus on the circle. Match your breath to the expanding and contracting rhythm.
+      </p>
     </div>
   );
 };
 
+// --- 2. THE EYE TRACKING COMPONENT ---
+const EyeTracking = () => {
+  return (
+    <div className="flex flex-col items-center justify-center text-center w-full animate-fade-in py-8">
+      
+      {/* Responsive CSS keyframe injected directly */}
+      <style>
+        {`
+          @keyframes bilateral-bounce {
+            0%, 100% { left: 0%; }
+            50% { left: calc(100% - 3rem); /* 3rem accounts for the w-12 ball width */ }
+          }
+          .animate-bilateral {
+            animation: bilateral-bounce 2.5s ease-in-out infinite;
+          }
+        `}
+      </style>
+
+      {/* Instructions */}
+      <div className="mb-16">
+        <h2 className="text-2xl font-semibold text-slate-200 tracking-wide mb-3">
+          Eye Tracking (EMDR)
+        </h2>
+        <p className="text-slate-400 text-sm max-w-md leading-relaxed mx-auto">
+          Follow the glowing sphere back and forth with your eyes. <br/>
+          <span className="text-teal-400/80 font-medium">Keep your head perfectly still.</span>
+        </p>
+      </div>
+
+      {/* The Animation Track */}
+      <div className="relative w-full max-w-md h-1 bg-slate-800 rounded-full flex items-center mb-12 mx-auto">
+        {/* The Glowing Ball */}
+        <div className="absolute w-12 h-12 bg-teal-400 rounded-full shadow-[0_0_40px_15px_rgba(45,212,191,0.4)] animate-bilateral" />
+      </div>
+
+    </div>
+  );
+};
+
+// --- 3. THE MAIN WELLNESS LAYOUT ---
+export const WellnessToolkit = () => {
+  const [activeExercise, setActiveExercise] = useState('breathing');
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const audioRef = useRef(null);
+
+  // Placeholder audio
+  const audioSource = "/rain.mp3"; 
+
+  const toggleAudio = () => {
+    if (isPlayingAudio) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play();
+    }
+    setIsPlayingAudio(!isPlayingAudio);
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[80vh] p-8 text-slate-200">
+      
+      {/* Header Section */}
+      <div className="text-center mb-10">
+        <h1 className="text-4xl font-bold text-indigo-400 mb-4">Wellness Toolkit</h1>
+        <p className="text-slate-400 max-w-md mx-auto">
+          Take a moment for yourself. Choose an exercise to ground your mind and ease your stress.
+        </p>
+      </div>
+
+      {/* Exercise Selector Menu */}
+      <div className="flex space-x-4 mb-12 bg-slate-800 p-2 rounded-2xl">
+        <button 
+          onClick={() => setActiveExercise('breathing')}
+          className={`px-6 py-3 rounded-xl font-medium transition-all duration-300 ${
+            activeExercise === 'breathing' 
+            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' 
+            : 'hover:bg-slate-700 text-slate-300'
+          }`}
+        >
+          🌬️ Box Breathing
+        </button>
+        <button 
+          onClick={() => setActiveExercise('eyetracking')}
+          className={`px-6 py-3 rounded-xl font-medium transition-all duration-300 ${
+            activeExercise === 'eyetracking' 
+            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' 
+            : 'hover:bg-slate-700 text-slate-300'
+          }`}
+        >
+          👀 Eye Tracking
+        </button>
+        <button 
+          onClick={() => setActiveExercise('grounding')}
+          className={`px-6 py-3 rounded-xl font-medium transition-all duration-300 ${
+            activeExercise === 'grounding' 
+            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' 
+            : 'hover:bg-slate-700 text-slate-300'
+          }`}
+        >
+          🖐️ 5-4-3-2-1 Grounding
+        </button>
+      </div>
+
+      {/* The Active Stage */}
+      <div className="w-full max-w-2xl bg-slate-800/50 border border-slate-700 rounded-3xl p-10 flex flex-col items-center justify-center min-h-[400px] overflow-hidden">
+        
+        {/* Breathing Stage */}
+        {activeExercise === 'breathing' && <BoxBreathing />}
+
+        {/* Eye Tracking Stage */}
+        {activeExercise === 'eyetracking' && <EyeTracking />}
+
+        {/* Grounding Stage (Placeholder) */}
+        {activeExercise === 'grounding' && (
+          <div className="text-center space-y-4 animate-fade-in">
+            <h3 className="text-2xl font-semibold text-indigo-300">Look around you.</h3>
+            <ul className="text-left text-slate-300 space-y-2 mt-4 inline-block">
+              <li>👀 Name 5 things you can see.</li>
+              <li>✋ Name 4 things you can feel.</li>
+              <li>👂 Name 3 things you can hear.</li>
+              <li>👃 Name 2 things you can smell.</li>
+              <li>👅 Name 1 thing you can taste.</li>
+            </ul>
+          </div>
+        )}
+
+      </div>
+
+      {/* Ambient Audio Controls */}
+      <div className="mt-12 bg-slate-800 px-6 py-4 rounded-full flex items-center space-x-4 border border-slate-700">
+        <button 
+          onClick={toggleAudio}
+          className="w-12 h-12 bg-indigo-600 rounded-full flex items-center justify-center hover:bg-indigo-500 transition-colors"
+        >
+          {isPlayingAudio ? "⏸️" : "▶️"}
+        </button>
+        <div className="flex flex-col">
+          <span className="text-sm font-medium text-slate-200">Ambient Rain Sounds</span>
+          <span className="text-xs text-slate-400">Calm your mind</span>
+        </div>
+        <audio ref={audioRef} src={audioSource} loop />
+      </div>
+
+    </div>
+  );
+};
